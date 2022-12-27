@@ -3,7 +3,7 @@
 # MAGIC # Mortgage Loan Data Analysis Performance 
 # MAGIC 
 # MAGIC <p></p>
-# MAGIC <img src='https://www.corelogic.com/wp-content/uploads/sites/4/2021/05/Loan-Performance-Insights-e1639430812246.jpg' width="800">
+# MAGIC <img src='https://www.corelogic.com/wp-content/uploads/sites/4/2021/05/Loan-Performance-Insights-e1639430812246.jpg' width="1500">
 
 # COMMAND ----------
 
@@ -20,6 +20,11 @@
 # MAGIC - Optimizing for all data use cases and workloads
 # MAGIC   - Today, supporting SQL and DataFrame workloads
 # MAGIC   - Coming soon, Streaming, Data Science, and more
+
+# COMMAND ----------
+
+# MAGIC %scala
+# MAGIC val startTime = System.nanoTime
 
 # COMMAND ----------
 
@@ -50,15 +55,6 @@
 
 # MAGIC %sql
 # MAGIC DESC DATABASE EXTENDED PhotonPerformance_mojgan_mazouchi_databricks_com_db
-
-# COMMAND ----------
-
-# MAGIC %sql
-# MAGIC USE PhotonPerformance_mojgan_mazouchi_databricks_com_db
-
-# COMMAND ----------
-
-# MAGIC %fs ls dbfs:/user/mojgan.mazouchi@databricks.com/PhotonPerformance
 
 # COMMAND ----------
 
@@ -116,9 +112,35 @@ file_schema = (spark
 
 # COMMAND ----------
 
-dfLendingClub = spark.read.format("parquet") \
+dfLendingClub_raw = spark.read.format("parquet") \
   .schema(file_schema) \
   .load("dbfs:/databricks-datasets/samples/lending_club/parquet/*.parquet")
+
+# extracting number of rows from the Dataframe
+row = dfLendingClub_raw.count()
+# extracting number of columns from the Dataframe using dtypes function
+col = len(dfLendingClub_raw.dtypes)
+
+# printing
+print(f'Dimension of the Dataframe is: {(row,col)}')
+
+# COMMAND ----------
+
+# DBTITLE 1,Upsample Our Pyspark Dataset
+oversampled_df =dfLendingClub_raw.sample(True, 0.95, 42) 
+
+# upsample the rows
+# oversampled_df = dfLendingClub_raw.withColumn("dummy", F.explode(F.array([F.lit(x) for x in range(10)]))).drop('dummy')
+# combine both oversampled rows and previous rows 
+dfLendingClub = dfLendingClub_raw.unionAll(oversampled_df)
+
+# extracting number of rows from the Dataframe
+row = dfLendingClub.count()
+# extracting number of columns from the Dataframe using dtypes function
+col = len(dfLendingClub.dtypes)
+
+# printing
+print(f'Dimension of the Dataframe is: {(row,col)}')
 
 # COMMAND ----------
 
@@ -137,14 +159,19 @@ dfLendingClub.write.mode("overwrite").saveAsTable("LendingClub")
 
 # DBTITLE 1,Make sure to avoid Side affects (No Cheating Demo Zone :-) ! ) 
 # MAGIC %scala
-# MAGIC 
-# MAGIC //sc.setJobDescription("Step A-0: Basic initialization") for scala and pyspark
 # MAGIC  
 # MAGIC //Disabled to avoid side effects (reduce side affects)
 # MAGIC spark.conf.set("spark.databricks.io.cache.enabled", "false")  
-# MAGIC // spark.conf.set("spark.sql.adaptive.enabled", "false")
-# MAGIC // spark.conf.set("spark.sql.adaptive.coalescePartitions.enabled", "false")
-# MAGIC // spark.conf.set("spark.sql.adaptive.localShuffleReader.enabled", "false")
+# MAGIC spark.conf.set("spark.sql.adaptive.enabled", "false")
+
+# COMMAND ----------
+
+#Enable photon and it's support for sort and window functions
+# spark.conf.set("spark.databricks.photon.enabled", "true")
+# spark.conf.set("spark.databricks.photon.parquetWriter.enabled", "true")
+# spark.conf.set("spark.databricks.photon.window.enabled", "true")
+# spark.conf.set("spark.databricks.photon.sort.enabled", "true")
+# spark.conf.set("spark.databricks.photon.window.experimental.features.enabled", "true")
 
 # COMMAND ----------
 
@@ -170,7 +197,6 @@ dfLendingClub.select('pymnt_plan').distinct().show()
 
 # DBTITLE 1,Create IntRate dimension
 # MAGIC %sql
-# MAGIC USE PhotonPerformance_mojgan_mazouchi_databricks_com_db;
 # MAGIC DROP TABLE IF EXISTS LendingClub_IntRate;
 # MAGIC CREATE TABLE LendingClub_IntRate
 # MAGIC USING DELTA 
@@ -212,6 +238,8 @@ dfLendingClub.select('pymnt_plan').distinct().show()
 # MAGIC   WHEN SUBSTRING(emp_length, 0, CHARINDEX('year', emp_length)-1) BETWEEN 1 AND 2 THEN "1year"
 # MAGIC   WHEN SUBSTRING(emp_length, 3, CHARINDEX('<', emp_length))==1 THEN "Under1year" 
 # MAGIC   ELSE "Unknown" END as EmpLength
+# MAGIC   , addr_state
+# MAGIC   , avg_cur_bal
 # MAGIC   FROM LendingClub
 # MAGIC )
 
@@ -241,12 +269,12 @@ dfLendingClub.select('pymnt_plan').distinct().show()
 
 # COMMAND ----------
 
-dbutils.data.summarize(spark.table('LendingClub_silver'))
+# dbutils.data.summarize(spark.table('LendingClub_silver'))
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC #Start Testing (Join, Spill, Skew,...)
+# MAGIC #Start Testing (Join and Aggregation)
 
 # COMMAND ----------
 
@@ -255,24 +283,61 @@ dbutils.data.summarize(spark.table('LendingClub_silver'))
 # MAGIC SELECT
 # MAGIC   T_len.EmpLength,
 # MAGIC   T_rate.IntRate,
-# MAGIC   count(DISTINCT addr_state) loan_by_state,
+# MAGIC   count(DISTINCT T.addr_state) cnt_loan_by_state,
 # MAGIC   avg(loan_amnt) avg_loan_by_state,
+# MAGIC   min(DISTINCT annual_inc) as min_annual_income,
+# MAGIC   max(DISTINCT annual_inc) as max_annual_income,
 # MAGIC   sum(total_pymnt) totalPayment_by_state
 # MAGIC FROM
 # MAGIC   LendingClub_silver T
-# MAGIC   LEFT JOIN LendingClub_EmpLength T_len on T_len.emp_length = T.emp_length
+# MAGIC   LEFT JOIN 
+# MAGIC   (SELECT row_number() OVER(PARTITION BY addr_state ORDER BY avg_cur_bal DESC) as row_num_avgBal_state, *
+# MAGIC   FROM LendingClub_EmpLength) T_len on T_len.emp_length = T.emp_length and T_len.avg_cur_bal BETWEEN 1 AND 2000
 # MAGIC   LEFT JOIN LendingClub_IntRate T_rate on T_rate.int_rate = T.int_rate
 # MAGIC WHERE
-# MAGIC   (annual_inc> 16000 and annual_inc< 100000) AND loan_status == 'Current'
+# MAGIC   (annual_inc> 16000) AND loan_status == 'Current'
 # MAGIC GROUP BY
 # MAGIC   1,
 # MAGIC   2
 # MAGIC HAVING EmpLength IN ('3-5Years', '1year', 'Under1year')
-# MAGIC ORDER BY
-# MAGIC   1, 
-# MAGIC   2
 
 # COMMAND ----------
 
+# MAGIC %scala
+# MAGIC val endTime = System.nanoTime
+# MAGIC println(s"time taken: " + (endTime - startTime).toDouble / 1000000000 + " seconds" )
 
+# COMMAND ----------
 
+# DBTITLE 1,Now Disable Photon and Test
+# MAGIC %python
+# MAGIC spark.conf.set("spark.databricks.photon.enabled", "false")
+# MAGIC spark.conf.set("spark.databricks.photon.parquetWriter.enabled", "false")
+# MAGIC spark.conf.set("spark.databricks.photon.window.enabled", "false")
+# MAGIC spark.conf.set("spark.databricks.photon.sort.enabled", "false")
+# MAGIC spark.conf.set("spark.databricks.photon.window.experimental.features.enabled", "false")
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC SET use_cached_result = false;
+# MAGIC SELECT
+# MAGIC   T_len.EmpLength,
+# MAGIC   T_rate.IntRate,
+# MAGIC   count(DISTINCT T.addr_state) cnt_loan_by_state,
+# MAGIC   avg(loan_amnt) avg_loan_by_state,
+# MAGIC   min(DISTINCT annual_inc) as min_annual_income,
+# MAGIC   max(DISTINCT annual_inc) as max_annual_income,
+# MAGIC   sum(total_pymnt) totalPayment_by_state
+# MAGIC FROM
+# MAGIC   LendingClub_silver T
+# MAGIC   LEFT JOIN 
+# MAGIC   (SELECT row_number() OVER(PARTITION BY addr_state ORDER BY avg_cur_bal DESC) as row_num_avgBal_state, *
+# MAGIC   FROM LendingClub_EmpLength) T_len on T_len.emp_length = T.emp_length and T_len.avg_cur_bal BETWEEN 1 AND 2000
+# MAGIC   LEFT JOIN LendingClub_IntRate T_rate on T_rate.int_rate = T.int_rate
+# MAGIC WHERE
+# MAGIC   (annual_inc> 16000) AND loan_status == 'Current'
+# MAGIC GROUP BY
+# MAGIC   1,
+# MAGIC   2
+# MAGIC HAVING EmpLength IN ('3-5Years', '1year', 'Under1year')
