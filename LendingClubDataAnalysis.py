@@ -167,11 +167,11 @@ dfLendingClub.write.mode("overwrite").saveAsTable("LendingClub")
 # COMMAND ----------
 
 #Enable photon and it's support for sort and window functions
-# spark.conf.set("spark.databricks.photon.enabled", "true")
-# spark.conf.set("spark.databricks.photon.parquetWriter.enabled", "true")
-# spark.conf.set("spark.databricks.photon.window.enabled", "true")
-# spark.conf.set("spark.databricks.photon.sort.enabled", "true")
-# spark.conf.set("spark.databricks.photon.window.experimental.features.enabled", "true")
+spark.conf.set("spark.databricks.photon.enabled", "true")
+spark.conf.set("spark.databricks.photon.parquetWriter.enabled", "true")
+spark.conf.set("spark.databricks.photon.window.enabled", "true")
+spark.conf.set("spark.databricks.photon.sort.enabled", "true")
+spark.conf.set("spark.databricks.photon.window.experimental.features.enabled", "true")
 
 # COMMAND ----------
 
@@ -280,6 +280,8 @@ dfLendingClub.select('pymnt_plan').distinct().show()
 
 # MAGIC %sql
 # MAGIC SET use_cached_result = false;
+# MAGIC DROP TABLE IF EXISTS LendingClub_gold_withPhoton;
+# MAGIC CREATE TABLE LendingClub_gold_withPhoton
 # MAGIC SELECT
 # MAGIC   T_len.EmpLength,
 # MAGIC   T_rate.IntRate,
@@ -321,6 +323,8 @@ dfLendingClub.select('pymnt_plan').distinct().show()
 
 # MAGIC %sql
 # MAGIC SET use_cached_result = false;
+# MAGIC DROP TABLE IF EXISTS LendingClub_gold_NoPhoton;
+# MAGIC CREATE TABLE LendingClub_gold_NoPhoton
 # MAGIC SELECT
 # MAGIC   T_len.EmpLength,
 # MAGIC   T_rate.IntRate,

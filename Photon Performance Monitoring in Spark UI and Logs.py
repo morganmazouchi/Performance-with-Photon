@@ -33,16 +33,116 @@
 # MAGIC 
 # MAGIC Databricks cluster performance can be observed in the Ganglia UI which runs live on the cluster.
 # MAGIC 
-# MAGIC <img src='https://github.com/brickmeister/workshop_production_delta/blob/main/img/ganglia%20ui.png?raw=true'>
+# MAGIC <img src='https://raw.githubusercontent.com/morganmazouchi/Performance-with-Photon/main/Images/Ganglia%20UI.png' width="1500">
 
 # COMMAND ----------
 
-
+# MAGIC %md
+# MAGIC 
+# MAGIC # Spark UI
+# MAGIC 
+# MAGIC Databricks exposes the Spark UI which will provide a large amount of usable statistics to measure the performance of your jobs. Every job in Spark consists of a series of spark tasks (stages) which form a directed acyclic graph (DAG). Examining these DAGs can help identify bottleneck stages to determine where more performance can be extracted. 
+# MAGIC 
+# MAGIC <img src='https://raw.githubusercontent.com/morganmazouchi/Performance-with-Photon/main/Images/Spark%20UI-%20Job%20159.png' width="800">
+# MAGIC <img src='https://raw.githubusercontent.com/morganmazouchi/Performance-with-Photon/main/Images/Spark%20UI-%20Job%20166%20-%20No%20Photon.png' width="1300">
 
 # COMMAND ----------
 
-
+# DBTITLE 0,Speed up queries by identifying execution bottlenecks in Query Plans
+# MAGIC %md
+# MAGIC 
+# MAGIC ## Speed up queries by identifying execution bottlenecks in Query Plans
+# MAGIC A common methodology for speeding up queries is to first identify the longest running query operators. We are more interested in total time spent on a task rather than the exact “wall clock time” of an operator as we’re dealing with a distributed system and operators can be executed in parallel. Each query operator comes with a slew of statistics. In the case of a scan operator, metrics include number of files or data read, time spent waiting for cloud storage or time spent reading files. As a result, it is easy to answer questions such as which table should be optimized or whether a join could be improved. All blue DAGs in the query plan confirms that photon was disabled when the query ran. 
+# MAGIC 
+# MAGIC <img src='https://raw.githubusercontent.com/morganmazouchi/Performance-with-Photon/main/Images/Databricks%20Shell%20-%20Details%20for%20Query%20299.png' width="1200">
 
 # COMMAND ----------
 
+spark.conf.set("spark.databricks.photon.enabled", "false")
+spark.conf.set("spark.databricks.photon.parquetWriter.enabled", "false")
+spark.conf.set("spark.databricks.photon.window.enabled", "false")
+spark.conf.set("spark.databricks.photon.sort.enabled", "false")
+spark.conf.set("spark.databricks.photon.window.experimental.features.enabled", "false")
 
+# COMMAND ----------
+
+# DBTITLE 1,Run Explain when Photon is Disabled
+# MAGIC %scala
+# MAGIC spark.sql("""EXPLAIN SELECT
+# MAGIC   T_len.EmpLength,
+# MAGIC   T_rate.IntRate,
+# MAGIC   count(DISTINCT T.addr_state) cnt_loan_by_state,
+# MAGIC   avg(loan_amnt) avg_loan_by_state,
+# MAGIC   min(DISTINCT annual_inc) as min_annual_income,
+# MAGIC   max(DISTINCT annual_inc) as max_annual_income,
+# MAGIC   sum(total_pymnt) totalPayment_by_state
+# MAGIC FROM
+# MAGIC   PhotonPerformance_mojgan_mazouchi_databricks_com_db.LendingClub_silver T
+# MAGIC   LEFT JOIN 
+# MAGIC   (SELECT row_number() OVER(PARTITION BY addr_state ORDER BY avg_cur_bal DESC) as row_num_avgBal_state, *
+# MAGIC   FROM PhotonPerformance_mojgan_mazouchi_databricks_com_db.LendingClub_EmpLength) T_len on T_len.emp_length = T.emp_length and T_len.avg_cur_bal BETWEEN 1 AND 2000
+# MAGIC   LEFT JOIN PhotonPerformance_mojgan_mazouchi_databricks_com_db.LendingClub_IntRate T_rate on T_rate.int_rate = T.int_rate
+# MAGIC WHERE
+# MAGIC   (annual_inc> 16000) AND loan_status == "Current"
+# MAGIC GROUP BY
+# MAGIC   1,
+# MAGIC   2
+# MAGIC HAVING EmpLength IN ('3-5Years', '1year', 'Under1year')""").collect().foreach(println)
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Photon execution analysis in Query Plan
+# MAGIC If you are using Photon on Databricks clusters, you can view Photon action in the Spark UI. The following screenshot shows the query details DAG. There are two indications of Photon in the DAG. First, Photon operators start with Photon, such as PhotonGroupingAgg. Secondly, in the DAG Photon operators and stages are colored orange, whereas the non-Photon ones are blue.
+# MAGIC 
+# MAGIC <img src='https://raw.githubusercontent.com/morganmazouchi/Performance-with-Photon/main/Images/Databricks%20Shell%20-%20Details%20for%20Query%20272.png' width="1800">
+
+# COMMAND ----------
+
+#Enable photon and it's support for sort and window functions
+spark.conf.set("spark.databricks.photon.enabled", "true")
+spark.conf.set("spark.databricks.photon.parquetWriter.enabled", "true")
+spark.conf.set("spark.databricks.photon.window.enabled", "true")
+spark.conf.set("spark.databricks.photon.sort.enabled", "true")
+spark.conf.set("spark.databricks.photon.window.experimental.features.enabled", "true")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ### Photon-Enabled Clusters
+# MAGIC 
+# MAGIC By enabling the advice text (`set spark.databricks.adviceGenerator.acceleratedWithPhoton.enabled = true;`), you can trace photon-enabled clusters logs in the INFO section of Driver logs under Log4j output. Look specifically for "Accelerated with photon" in the logs to find out how much your queries and workloads accelerated by photon.
+# MAGIC 
+# MAGIC <img alt="Caution" title="Caution" style="vertical-align: text-bottom; position: relative; height:1.3em; top:0.0em" src="https://files.training.databricks.com/static/images/icon-warning.svg"/> 
+# MAGIC ** Advice text is disabled by default**, and you have to enable it in advance, prior to running your queries.
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC 
+# MAGIC set spark.databricks.adviceGenerator.acceleratedWithPhoton.enabled = true;
+
+# COMMAND ----------
+
+# DBTITLE 1,Run Explain on Photon-Enabled Cluster
+# MAGIC %scala
+# MAGIC spark.sql("""EXPLAIN SELECT
+# MAGIC   T_len.EmpLength,
+# MAGIC   T_rate.IntRate,
+# MAGIC   count(DISTINCT T.addr_state) cnt_loan_by_state,
+# MAGIC   avg(loan_amnt) avg_loan_by_state,
+# MAGIC   min(DISTINCT annual_inc) as min_annual_income,
+# MAGIC   max(DISTINCT annual_inc) as max_annual_income,
+# MAGIC   sum(total_pymnt) totalPayment_by_state
+# MAGIC FROM
+# MAGIC   PhotonPerformance_mojgan_mazouchi_databricks_com_db.LendingClub_silver T
+# MAGIC   LEFT JOIN 
+# MAGIC   (SELECT row_number() OVER(PARTITION BY addr_state ORDER BY avg_cur_bal DESC) as row_num_avgBal_state, *
+# MAGIC   FROM PhotonPerformance_mojgan_mazouchi_databricks_com_db.LendingClub_EmpLength) T_len on T_len.emp_length = T.emp_length and T_len.avg_cur_bal BETWEEN 1 AND 2000
+# MAGIC   LEFT JOIN PhotonPerformance_mojgan_mazouchi_databricks_com_db.LendingClub_IntRate T_rate on T_rate.int_rate = T.int_rate
+# MAGIC WHERE
+# MAGIC   (annual_inc> 16000) AND loan_status == "Current"
+# MAGIC GROUP BY
+# MAGIC   1,
+# MAGIC   2
+# MAGIC HAVING EmpLength IN ('3-5Years', '1year', 'Under1year')""").collect().foreach(println)
