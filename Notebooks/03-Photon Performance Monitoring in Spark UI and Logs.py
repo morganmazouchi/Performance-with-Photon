@@ -108,22 +108,6 @@ spark.conf.set("spark.databricks.photon.window.experimental.features.enabled", "
 
 # COMMAND ----------
 
-# MAGIC %md
-# MAGIC ### Photon-Enabled Clusters
-# MAGIC 
-# MAGIC By enabling the advice text (`set spark.databricks.adviceGenerator.acceleratedWithPhoton.enabled = true;`), you can trace photon-enabled clusters logs in the INFO section of Driver logs under Log4j output. Look specifically for "Accelerated with photon" in the logs to find out how much your queries and workloads accelerated by photon.
-# MAGIC 
-# MAGIC <img alt="Caution" title="Caution" style="vertical-align: text-bottom; position: relative; height:1.3em; top:0.0em" src="https://files.training.databricks.com/static/images/icon-warning.svg"/> 
-# MAGIC ** Advice text is disabled by default**, and you have to enable it in advance, prior to running your queries.
-
-# COMMAND ----------
-
-# MAGIC %sql
-# MAGIC 
-# MAGIC set spark.databricks.adviceGenerator.acceleratedWithPhoton.enabled = true;
-
-# COMMAND ----------
-
 # DBTITLE 1,Run Explain on Photon-Enabled Cluster
 # MAGIC %scala
 # MAGIC spark.sql("""EXPLAIN SELECT
@@ -146,3 +130,48 @@ spark.conf.set("spark.databricks.photon.window.experimental.features.enabled", "
 # MAGIC   1,
 # MAGIC   2
 # MAGIC HAVING EmpLength IN ('3-5Years', '1year', 'Under1year')""").collect().foreach(println)
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ### Photon-Enabled Clusters
+# MAGIC 
+# MAGIC By enabling the advice text (`set spark.databricks.adviceGenerator.acceleratedWithPhoton.enabled = true;`), you can trace photon-enabled clusters logs in the INFO section of Driver logs under Log4j output. Look specifically for "Accelerated with photon" in the logs to find out how much your queries and workloads accelerated by photon.
+# MAGIC 
+# MAGIC <img alt="Caution" title="Caution" style="vertical-align: text-bottom; position: relative; height:1.3em; top:0.0em" src="https://files.training.databricks.com/static/images/icon-warning.svg"/> 
+# MAGIC ** Advice text is disabled by default**, and you have to enable it in advance, prior to running your queries.
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC <img src='https://raw.githubusercontent.com/morganmazouchi/Performance-with-Photon/main/Images/log%204j%20output.png' width="2500">
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC 
+# MAGIC set spark.databricks.adviceGenerator.acceleratedWithPhoton.enabled = true;
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC SELECT
+# MAGIC   T_len.EmpLength,
+# MAGIC   T_rate.IntRate,
+# MAGIC   count(DISTINCT T.addr_state) cnt_loan_by_state,
+# MAGIC   avg(loan_amnt) avg_loan_by_state,
+# MAGIC   min(DISTINCT annual_inc) as min_annual_income,
+# MAGIC   max(DISTINCT annual_inc) as max_annual_income,
+# MAGIC   sum(total_pymnt) totalPayment_by_state
+# MAGIC FROM
+# MAGIC   PhotonPerformance_mojgan_mazouchi_databricks_com_db.LendingClub_silver T
+# MAGIC   LEFT JOIN 
+# MAGIC   (SELECT row_number() OVER(PARTITION BY addr_state ORDER BY avg_cur_bal DESC) as row_num_avgBal_state, *
+# MAGIC   FROM PhotonPerformance_mojgan_mazouchi_databricks_com_db.LendingClub_EmpLength) T_len on T_len.emp_length = T.emp_length and T_len.avg_cur_bal BETWEEN 1 AND 10
+# MAGIC   LEFT JOIN PhotonPerformance_mojgan_mazouchi_databricks_com_db.LendingClub_IntRate T_rate on T_rate.int_rate = T.int_rate
+# MAGIC WHERE
+# MAGIC   (annual_inc> 16000) AND loan_status == "Current"
+# MAGIC GROUP BY
+# MAGIC   1,
+# MAGIC   2
+# MAGIC HAVING EmpLength IN ('3-5Years', '1year', 'Under1year')
