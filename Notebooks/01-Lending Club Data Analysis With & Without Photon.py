@@ -49,7 +49,7 @@
 
 # COMMAND ----------
 
-# MAGIC %run ./Includes/setup $mode="reset"
+# MAGIC %run ./00-setup $mode="reset"
 
 # COMMAND ----------
 
@@ -158,11 +158,9 @@ dfLendingClub.write.mode("overwrite").saveAsTable("LendingClub")
 # COMMAND ----------
 
 # DBTITLE 1,Make sure to avoid Side affects (No Cheating Demo Zone :-) ! ) 
-# MAGIC %scala
-# MAGIC  
-# MAGIC //Disabled to avoid side effects (reduce side affects)
-# MAGIC spark.conf.set("spark.databricks.io.cache.enabled", "false")  
-# MAGIC spark.conf.set("spark.sql.adaptive.enabled", "false")
+#Disabled to avoid side effects (reduce side affects)
+spark.conf.set("spark.databricks.io.cache.enabled", "false")  
+spark.conf.set("spark.sql.adaptive.enabled", "false")
 
 # COMMAND ----------
 
