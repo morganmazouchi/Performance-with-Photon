@@ -23,11 +23,6 @@
 
 # COMMAND ----------
 
-# MAGIC %scala
-# MAGIC val startTime = System.nanoTime
-
-# COMMAND ----------
-
 # MAGIC %md
 # MAGIC ## Use Cases
 # MAGIC -  **Where Photon Helps** - Photon demonstrates the largest benefits for longer running jobs/queries on large data sets (10s of millions of rows).  Since Photon only impacts the execution phase of the job (vs planning, compilation, scheduling, IO, etc).  The best impact is on workloads with a high volume of batch data, with calculations, aggregations, and joins - where you are repeatedly scanning/inspecting/manipulating entire columns of data - very common to the type of thing you would see in summary reports, Data Science, and ML. Typically these queries take minutes if not hours.  Photon can really help here.
@@ -50,11 +45,6 @@
 # COMMAND ----------
 
 # MAGIC %run ./00-setup $mode="reset"
-
-# COMMAND ----------
-
-# MAGIC %sql
-# MAGIC DESC DATABASE EXTENDED PhotonPerformance_mojgan_mazouchi_databricks_com_db
 
 # COMMAND ----------
 
@@ -91,7 +81,7 @@
 
 # DBTITLE 1,Define the schema and ingestion dataframes
 ##
-#  Setup a data set to create gzipped json files
+#  Setup a data set 
 ##
 
 import time
@@ -107,22 +97,12 @@ file_schema = (spark
                .format("parquet")
                .option("inferSchema", True)
                .load("dbfs:/databricks-datasets/samples/lending_club/parquet/*.parquet")
-               .limit(10)
+               .limit(1)
                .schema)
-
-# COMMAND ----------
 
 dfLendingClub_raw = spark.read.format("parquet") \
   .schema(file_schema) \
   .load("dbfs:/databricks-datasets/samples/lending_club/parquet/*.parquet")
-
-# extracting number of rows from the Dataframe
-row = dfLendingClub_raw.count()
-# extracting number of columns from the Dataframe using dtypes function
-col = len(dfLendingClub_raw.dtypes)
-
-# printing
-print(f'Dimension of the Dataframe is: {(row,col)}')
 
 # COMMAND ----------
 
@@ -164,22 +144,13 @@ spark.conf.set("spark.sql.adaptive.enabled", "false")
 
 # COMMAND ----------
 
-#Enable photon and it's support for sort and window functions
-spark.conf.set("spark.databricks.photon.enabled", "true")
-spark.conf.set("spark.databricks.photon.parquetWriter.enabled", "true")
-spark.conf.set("spark.databricks.photon.window.enabled", "true")
-spark.conf.set("spark.databricks.photon.sort.enabled", "true")
-spark.conf.set("spark.databricks.photon.window.experimental.features.enabled", "true")
-
-# COMMAND ----------
-
 # DBTITLE 1,Find the distinct int_rate, will use this later to create a lookup dimension, so we have something to join to
-dfLendingClub.select('int_rate').distinct().show()
+display(dfLendingClub.select('int_rate').distinct())
 
 # COMMAND ----------
 
 # DBTITLE 1,Find the distinct payment_types, will use this later to create a lookup dimension, so we have something to join to
-dfLendingClub.select('pymnt_plan').distinct().show()
+display(dfLendingClub.select('pymnt_plan').distinct())
 
 # COMMAND ----------
 
@@ -209,11 +180,6 @@ dfLendingClub.select('pymnt_plan').distinct().show()
 # MAGIC   ELSE "ExtremelyHighRate" END as IntRate
 # MAGIC   FROM LendingClub
 # MAGIC )
-
-# COMMAND ----------
-
-# MAGIC %sql
-# MAGIC select count(*) from LendingClub_IntRate 
 
 # COMMAND ----------
 
@@ -262,15 +228,6 @@ dfLendingClub.select('pymnt_plan').distinct().show()
 
 # COMMAND ----------
 
-# MAGIC %sql
-# MAGIC select count(*) from LendingClub_silver
-
-# COMMAND ----------
-
-# dbutils.data.summarize(spark.table('LendingClub_silver'))
-
-# COMMAND ----------
-
 # MAGIC %md
 # MAGIC #Start Testing (Join and Aggregation)
 
@@ -300,12 +257,6 @@ dfLendingClub.select('pymnt_plan').distinct().show()
 # MAGIC   1,
 # MAGIC   2
 # MAGIC HAVING EmpLength IN ('3-5Years', '1year', 'Under1year')
-
-# COMMAND ----------
-
-# MAGIC %scala
-# MAGIC val endTime = System.nanoTime
-# MAGIC println(s"time taken: " + (endTime - startTime).toDouble / 1000000000 + " seconds" )
 
 # COMMAND ----------
 

@@ -39,3 +39,8 @@ def check_files(table_name):
 if mode == "cleanup":
     spark.sql(f"DROP DATABASE IF EXISTS {database} CASCADE")
     dbutils.fs.rm(userhome, True)
+
+# COMMAND ----------
+
+if mode == "reuse":
+    spark.sql(f"USE {database}")
