@@ -19,7 +19,7 @@
 # MAGIC   - Transparent operation to users - no need to invoke something new, it just works
 # MAGIC - Optimizing for all data use cases and workloads
 # MAGIC   - Today, supporting SQL and DataFrame workloads
-# MAGIC   - Coming soon, Streaming, Data Science, and more
+# MAGIC   - Coming soon, Data Science, and more
 
 # COMMAND ----------
 
