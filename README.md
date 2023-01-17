@@ -13,12 +13,13 @@ This repository contains the notebooks that are used in the workshop to demonstr
 
 # Workshop Flow
 
-The workshop consists of 3 interactive sections that are separated by 3 notebooks located in the notebooks folder in this repository. Each is run sequentially as we explore how and when to use photon and at the end how to monitor the performance gain achived with photon in spark UI.
+The workshop consists of 3 interactive sections that are separated by 3 notebooks located in the notebooks folder in this repository. Each is run sequentially as we explore how and when to use photon and how to monitor the performance gain achived with photon in spark UI.
 |Notebook|Summary|
 |--------|-------|
 |`01-Lending Club Data Analysis With & Without Photon|Processing lending club dataset and running aggregations and Join queries with and without Photon to compare the processing time
-|`02-TBD|
-|`03-Photon Performance Monitoring in Spark UI and Logs|Monitor and analyze Photon action in the Spark UI|
+|`02-Photon Performance Monitoring in Spark UI and Logs|Monitor and analyze Photon action in the Spark UI|
+|`03-When-Photon-Doesnt-Help|showcase a workload that does not need to run on photon enabled cluster|
+
 
 
 # Setup / Requirements
