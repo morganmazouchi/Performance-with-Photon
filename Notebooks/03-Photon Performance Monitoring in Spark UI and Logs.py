@@ -58,6 +58,10 @@
 
 # COMMAND ----------
 
+# MAGIC %run ./00-setup $mode="reuse"
+
+# COMMAND ----------
+
 spark.conf.set("spark.databricks.photon.enabled", "false")
 spark.conf.set("spark.databricks.photon.parquetWriter.enabled", "false")
 spark.conf.set("spark.databricks.photon.window.enabled", "false")
@@ -77,11 +81,11 @@ spark.conf.set("spark.databricks.photon.window.experimental.features.enabled", "
 # MAGIC   max(DISTINCT annual_inc) as max_annual_income,
 # MAGIC   sum(total_pymnt) totalPayment_by_state
 # MAGIC FROM
-# MAGIC   PhotonPerformance_mojgan_mazouchi_databricks_com_db.LendingClub_silver T
+# MAGIC   LendingClub_silver T
 # MAGIC   LEFT JOIN 
 # MAGIC   (SELECT row_number() OVER(PARTITION BY addr_state ORDER BY avg_cur_bal DESC) as row_num_avgBal_state, *
-# MAGIC   FROM PhotonPerformance_mojgan_mazouchi_databricks_com_db.LendingClub_EmpLength) T_len on T_len.emp_length = T.emp_length and T_len.avg_cur_bal BETWEEN 1 AND 2000
-# MAGIC   LEFT JOIN PhotonPerformance_mojgan_mazouchi_databricks_com_db.LendingClub_IntRate T_rate on T_rate.int_rate = T.int_rate
+# MAGIC   FROM LendingClub_EmpLength) T_len on T_len.emp_length = T.emp_length and T_len.avg_cur_bal BETWEEN 1 AND 2000
+# MAGIC   LEFT JOIN LendingClub_IntRate T_rate on T_rate.int_rate = T.int_rate
 # MAGIC WHERE
 # MAGIC   (annual_inc> 16000) AND loan_status == "Current"
 # MAGIC GROUP BY
@@ -119,11 +123,11 @@ spark.conf.set("spark.databricks.photon.window.experimental.features.enabled", "
 # MAGIC   max(DISTINCT annual_inc) as max_annual_income,
 # MAGIC   sum(total_pymnt) totalPayment_by_state
 # MAGIC FROM
-# MAGIC   PhotonPerformance_mojgan_mazouchi_databricks_com_db.LendingClub_silver T
+# MAGIC   LendingClub_silver T
 # MAGIC   LEFT JOIN 
 # MAGIC   (SELECT row_number() OVER(PARTITION BY addr_state ORDER BY avg_cur_bal DESC) as row_num_avgBal_state, *
-# MAGIC   FROM PhotonPerformance_mojgan_mazouchi_databricks_com_db.LendingClub_EmpLength) T_len on T_len.emp_length = T.emp_length and T_len.avg_cur_bal BETWEEN 1 AND 2000
-# MAGIC   LEFT JOIN PhotonPerformance_mojgan_mazouchi_databricks_com_db.LendingClub_IntRate T_rate on T_rate.int_rate = T.int_rate
+# MAGIC   FROM LendingClub_EmpLength) T_len on T_len.emp_length = T.emp_length and T_len.avg_cur_bal BETWEEN 1 AND 2000
+# MAGIC   LEFT JOIN LendingClub_IntRate T_rate on T_rate.int_rate = T.int_rate
 # MAGIC WHERE
 # MAGIC   (annual_inc> 16000) AND loan_status == "Current"
 # MAGIC GROUP BY
@@ -164,11 +168,11 @@ spark.conf.set("spark.databricks.photon.window.experimental.features.enabled", "
 # MAGIC   max(DISTINCT annual_inc) as max_annual_income,
 # MAGIC   sum(total_pymnt) totalPayment_by_state
 # MAGIC FROM
-# MAGIC   PhotonPerformance_mojgan_mazouchi_databricks_com_db.LendingClub_silver T
+# MAGIC   LendingClub_silver T
 # MAGIC   LEFT JOIN 
 # MAGIC   (SELECT row_number() OVER(PARTITION BY addr_state ORDER BY avg_cur_bal DESC) as row_num_avgBal_state, *
-# MAGIC   FROM PhotonPerformance_mojgan_mazouchi_databricks_com_db.LendingClub_EmpLength) T_len on T_len.emp_length = T.emp_length and T_len.avg_cur_bal BETWEEN 1 AND 10
-# MAGIC   LEFT JOIN PhotonPerformance_mojgan_mazouchi_databricks_com_db.LendingClub_IntRate T_rate on T_rate.int_rate = T.int_rate
+# MAGIC   FROM LendingClub_EmpLength) T_len on T_len.emp_length = T.emp_length and T_len.avg_cur_bal BETWEEN 1 AND 10
+# MAGIC   LEFT JOIN LendingClub_IntRate T_rate on T_rate.int_rate = T.int_rate
 # MAGIC WHERE
 # MAGIC   (annual_inc> 16000) AND loan_status == "Current"
 # MAGIC GROUP BY
