@@ -149,16 +149,6 @@ display(dfLendingClub.select('int_rate').distinct())
 
 # COMMAND ----------
 
-# DBTITLE 1,Find the distinct payment_types, will use this later to create a lookup dimension, so we have something to join to
-display(dfLendingClub.select('pymnt_plan').distinct())
-
-# COMMAND ----------
-
-# MAGIC %sql
-# MAGIC SELECT count(*) from LendingClub
-
-# COMMAND ----------
-
 # MAGIC %md
 # MAGIC ## Create Silver Tables
 
