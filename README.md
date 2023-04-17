@@ -28,7 +28,7 @@ This workshop requires a running Databricks workspace. If you are an existing Da
 
 ## DBR Version
 
-The notebooks used in this workshop require `DBR 11.3 LTS`.
+The notebooks used in this workshop require `DBR 12.2 LTS`.
 
 ## Repos
 
