@@ -239,7 +239,7 @@ display(dfLendingClub.select('int_rate').distinct())
 # MAGIC   LendingClub_silver T
 # MAGIC   LEFT JOIN 
 # MAGIC   (SELECT row_number() OVER(PARTITION BY addr_state ORDER BY avg_cur_bal DESC) as row_num_avgBal_state, *
-# MAGIC   FROM LendingClub_EmpLength) T_len on T_len.emp_length = T.emp_length and T_len.avg_cur_bal BETWEEN 1 AND 2000
+# MAGIC   FROM LendingClub_EmpLength) T_len on T_len.emp_length = T.emp_length and T_len.avg_cur_bal BETWEEN 1 AND 1000
 # MAGIC   LEFT JOIN LendingClub_IntRate T_rate on T_rate.int_rate = T.int_rate
 # MAGIC WHERE
 # MAGIC   (annual_inc> 16000) AND loan_status == 'Current'
@@ -276,7 +276,7 @@ display(dfLendingClub.select('int_rate').distinct())
 # MAGIC   LendingClub_silver T
 # MAGIC   LEFT JOIN 
 # MAGIC   (SELECT row_number() OVER(PARTITION BY addr_state ORDER BY avg_cur_bal DESC) as row_num_avgBal_state, *
-# MAGIC   FROM LendingClub_EmpLength) T_len on T_len.emp_length = T.emp_length and T_len.avg_cur_bal BETWEEN 1 AND 2000
+# MAGIC   FROM LendingClub_EmpLength) T_len on T_len.emp_length = T.emp_length and T_len.avg_cur_bal BETWEEN 1 AND 1000
 # MAGIC   LEFT JOIN LendingClub_IntRate T_rate on T_rate.int_rate = T.int_rate
 # MAGIC WHERE
 # MAGIC   (annual_inc> 16000) AND loan_status == 'Current'
