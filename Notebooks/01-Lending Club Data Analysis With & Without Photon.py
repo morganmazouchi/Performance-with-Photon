@@ -331,7 +331,7 @@ display(dfLendingClub.select('int_rate').distinct())
 # COMMAND ----------
 
 # MAGIC %sql
-# MAGIC
+# MAGIC SET use_cached_result = false;
 # MAGIC MERGE INTO LendingClub_EmpLength_withoutPhoton as target
 # MAGIC USING Updates_in_emplength as source
 # MAGIC ON target.addr_state = source.addr_state
