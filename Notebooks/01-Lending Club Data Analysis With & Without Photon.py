@@ -1,14 +1,14 @@
 # Databricks notebook source
 # MAGIC %md
 # MAGIC # Mortgage Loan Data Analysis Performance 
-# MAGIC 
+# MAGIC
 # MAGIC <p></p>
 # MAGIC <img src='https://www.corelogic.com/wp-content/uploads/sites/4/2021/05/Loan-Performance-Insights-e1639430812246.jpg' width="1500">
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC 
+# MAGIC
 # MAGIC ##Building a Next Generation Query Engine
 # MAGIC - Re-architected for the fastest performance on real-world applications 
 # MAGIC   - Native C++ engine for faster queries
@@ -26,14 +26,14 @@
 # MAGIC %md
 # MAGIC ## Use Cases
 # MAGIC -  **Where Photon Helps** - Photon demonstrates the largest benefits for longer running jobs/queries on large data sets (10s of millions of rows).  Since Photon only impacts the execution phase of the job (vs planning, compilation, scheduling, IO, etc).  The best impact is on workloads with a high volume of batch data, with calculations, aggregations, and joins - where you are repeatedly scanning/inspecting/manipulating entire columns of data - very common to the type of thing you would see in summary reports, Data Science, and ML. Typically these queries take minutes if not hours.  Photon can really help here.
-# MAGIC 
+# MAGIC
 # MAGIC - **Where Photon won't help much** - workloads where most time is spent outside of actual execution  - e.g. mostly spent on file I/O, just reading, writing, and filtering.  There's no math here, no aggregations nor joins, and no need for the massive SIMD parallelism - there's not much for Photon to add here.
 
 # COMMAND ----------
 
 # MAGIC %md
 # MAGIC ##Enabling Photon
-# MAGIC 
+# MAGIC
 # MAGIC It's your choice whether to utilize the benefits of Photon - you get to choose when you startup the clusters for your notebooks, or your SQL endpoints.  Photon was designed to help specific Big Data calculation intensive workloads. We recommend you do your own benchmarking to decide whether or not to use it.  
 
 # COMMAND ----------
@@ -56,10 +56,10 @@
 # MAGIC %md
 # MAGIC ## Get Raw data for Lending Club
 # MAGIC It's included in every Databricks workspace. The data used is public data from Lending Club. It includes all funded loans from 2012 to 2017. Each loan includes applicant information provided by the applicant as well as the current loan status (Current, Late, Fully Paid, etc.) and latest payment information. For a full view of the data please view the data dictionary available [here](https://resources.lendingclub.com/LCDataDictionary.xlsx).
-# MAGIC 
-# MAGIC 
+# MAGIC
+# MAGIC
 # MAGIC ![Loan_Data](https://preview.ibb.co/d3tQ4R/Screen_Shot_2018_02_02_at_11_21_51_PM.png)
-# MAGIC 
+# MAGIC
 # MAGIC https://www.kaggle.com/wendykan/lending-club-loan-data 
 
 # COMMAND ----------
@@ -71,10 +71,10 @@
 
 # MAGIC %md
 # MAGIC # Schemas
-# MAGIC 
+# MAGIC
 # MAGIC <img src='https://d9-wret.s3.us-west-2.amazonaws.com/assets/palladium/production/s3fs-public/styles/info_block/public/thumbnails/image/dm-file-formats.jpg?itok=2PE7A_QR' width="400">
-# MAGIC 
-# MAGIC 
+# MAGIC
+# MAGIC
 # MAGIC The full schema of the origination and monthly performance data files are available on <a href="https://www.freddiemac.com/fmac-resources/research/pdf/user_guide.pdf">the user guide</a>. In this notebook, we can see some of the most relevant fields for mortgage loan performance monitoring.
 
 # COMMAND ----------
@@ -200,7 +200,16 @@ display(dfLendingClub.select('int_rate').distinct())
 # COMMAND ----------
 
 # MAGIC %sql
-# MAGIC 
+# MAGIC
+# MAGIC DROP TABLE IF EXISTS LendingClub_EmpLength_withoutPhoton;
+# MAGIC CREATE TABLE LendingClub_EmpLength_withoutPhoton
+# MAGIC AS
+# MAGIC SELECT * FROM LendingClub_EmpLength; 
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC
 # MAGIC SELECT * from LendingClub_EmpLength 
 
 # COMMAND ----------
@@ -209,12 +218,34 @@ display(dfLendingClub.select('int_rate').distinct())
 # MAGIC %sql
 # MAGIC DROP TABLE IF EXISTS LendingClub_silver;
 # MAGIC CREATE TABLE LendingClub_silver 
+# MAGIC PARTITIONED BY(loan_status)
 # MAGIC AS
 # MAGIC SELECT *
 # MAGIC FROM LendingClub
 # MAGIC WHERE
 # MAGIC   (emp_length != 'n/a' AND emp_length IS NOT NULL)
 # MAGIC   AND SUBSTRING(int_rate, 0, CHARINDEX('.', int_rate)-1) BETWEEN 0 AND 30
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC CREATE Table Updates_in_emplength
+# MAGIC AS SELECT 
+# MAGIC col1 AS addr_state,
+# MAGIC col2 AS EmpLength
+# MAGIC FROM (VALUES 
+# MAGIC   ('AK', '1year'),
+# MAGIC   ('FL', '1year'),
+# MAGIC   ('CO', 'Unknown'));
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC
+# MAGIC MERGE INTO LendingClub_EmpLength as target
+# MAGIC USING Updates_in_emplength as source
+# MAGIC ON target.addr_state = source.addr_state
+# MAGIC WHEN MATCHED THEN DELETE
 
 # COMMAND ----------
 
@@ -227,8 +258,10 @@ display(dfLendingClub.select('int_rate').distinct())
 # MAGIC SET use_cached_result = false;
 # MAGIC DROP TABLE IF EXISTS LendingClub_gold_withPhoton;
 # MAGIC CREATE TABLE LendingClub_gold_withPhoton
+# MAGIC PARTITIONED BY(EmpLength)
+# MAGIC AS
 # MAGIC SELECT
-# MAGIC   T_len.EmpLength,
+# MAGIC   T_len.EmpLength as EmpLength,
 # MAGIC   T_rate.IntRate,
 # MAGIC   count(DISTINCT T.addr_state) cnt_loan_by_state,
 # MAGIC   avg(loan_amnt) avg_loan_by_state,
@@ -264,6 +297,8 @@ display(dfLendingClub.select('int_rate').distinct())
 # MAGIC SET use_cached_result = false;
 # MAGIC DROP TABLE IF EXISTS LendingClub_gold_NoPhoton;
 # MAGIC CREATE TABLE LendingClub_gold_NoPhoton
+# MAGIC PARTITIONED BY(EmpLength)
+# MAGIC AS
 # MAGIC SELECT
 # MAGIC   T_len.EmpLength,
 # MAGIC   T_rate.IntRate,
@@ -284,3 +319,20 @@ display(dfLendingClub.select('int_rate').distinct())
 # MAGIC   1,
 # MAGIC   2
 # MAGIC HAVING EmpLength IN ('3-5Years', '1year', 'Under1year')
+
+# COMMAND ----------
+
+# DBTITLE 1,Disable Predictive I/O which by default is enabled on Photon-accelerated clusters fro DBR 12.1+
+# MAGIC %sql
+# MAGIC ALTER TABLE LendingClub_silver SET TBLPROPERTIES ('delta.enableDeletionVectors' = false);
+# MAGIC ALTER TABLE LendingClub_EmpLength SET TBLPROPERTIES ('delta.enableDeletionVectors' = false);
+# MAGIC ALTER TABLE LendingClub_IntRate SET TBLPROPERTIES ('delta.enableDeletionVectors' = false);
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC
+# MAGIC MERGE INTO LendingClub_EmpLength_withoutPhoton as target
+# MAGIC USING Updates_in_emplength as source
+# MAGIC ON target.addr_state = source.addr_state
+# MAGIC WHEN MATCHED THEN DELETE
