@@ -121,9 +121,6 @@ col = len(dfLendingClub.dtypes)
 
 # printing
 print(f'Dimension of the Dataframe is: {(row,col)}')
-
-# COMMAND ----------
-
 display(dfLendingClub)
 
 # COMMAND ----------
@@ -141,11 +138,6 @@ dfLendingClub.write.mode("overwrite").saveAsTable("LendingClub")
 #Disabled to avoid side effects (reduce side affects)
 spark.conf.set("spark.databricks.io.cache.enabled", "false")  
 spark.conf.set("spark.sql.adaptive.enabled", "false")
-
-# COMMAND ----------
-
-# DBTITLE 1,Find the distinct int_rate, will use this later to create a lookup dimension, so we have something to join to
-display(dfLendingClub.select('int_rate').distinct())
 
 # COMMAND ----------
 
@@ -169,12 +161,8 @@ display(dfLendingClub.select('int_rate').distinct())
 # MAGIC   WHEN SUBSTRING(int_rate, 0, CHARINDEX('.', int_rate)-1) BETWEEN 15 AND 20 THEN "HighRate" 
 # MAGIC   ELSE "ExtremelyHighRate" END as IntRate
 # MAGIC   FROM LendingClub
-# MAGIC )
-
-# COMMAND ----------
-
-# MAGIC %sql
-# MAGIC SELECT * FROM LendingClub_IntRate 
+# MAGIC );
+# MAGIC SELECT * FROM LendingClub_IntRate; 
 
 # COMMAND ----------
 
@@ -195,22 +183,8 @@ display(dfLendingClub.select('int_rate').distinct())
 # MAGIC   , addr_state
 # MAGIC   , avg_cur_bal
 # MAGIC   FROM LendingClub
-# MAGIC )
-
-# COMMAND ----------
-
-# MAGIC %sql
-# MAGIC
-# MAGIC DROP TABLE IF EXISTS LendingClub_EmpLength_withoutPhoton;
-# MAGIC CREATE TABLE LendingClub_EmpLength_withoutPhoton
-# MAGIC AS
-# MAGIC SELECT * FROM LendingClub_EmpLength; 
-
-# COMMAND ----------
-
-# MAGIC %sql
-# MAGIC
-# MAGIC SELECT * from LendingClub_EmpLength 
+# MAGIC );
+# MAGIC SELECT * from LendingClub_EmpLength; 
 
 # COMMAND ----------
 
@@ -229,23 +203,32 @@ display(dfLendingClub.select('int_rate').distinct())
 # COMMAND ----------
 
 # MAGIC %sql
-# MAGIC CREATE Table Updates_in_emplength
-# MAGIC AS SELECT 
-# MAGIC col1 AS addr_state,
-# MAGIC col2 AS EmpLength
-# MAGIC FROM (VALUES 
-# MAGIC   ('AK', '1year'),
-# MAGIC   ('FL', '1year'),
-# MAGIC   ('CO', 'Unknown'));
+# MAGIC DROP TABLE IF EXISTS LendingClub_EmpLength_withPhoton;
+# MAGIC CREATE TABLE LendingClub_EmpLength_withPhoton
+# MAGIC AS
+# MAGIC SELECT DISTINCT emp_length, EmpLength, addr_state FROM LendingClub_EmpLength;
+# MAGIC
+# MAGIC DROP TABLE IF EXISTS LendingClub_EmpLength_withoutPhoton;
+# MAGIC CREATE TABLE LendingClub_EmpLength_withoutPhoton
+# MAGIC AS
+# MAGIC SELECT DISTINCT emp_length, EmpLength, addr_state FROM LendingClub_EmpLength;
 
 # COMMAND ----------
 
 # MAGIC %sql
-# MAGIC
-# MAGIC MERGE INTO LendingClub_EmpLength as target
-# MAGIC USING Updates_in_emplength as source
-# MAGIC ON target.addr_state = source.addr_state
-# MAGIC WHEN MATCHED THEN DELETE
+# MAGIC DROP TABLE IF EXISTS Updates_in_emplength;
+# MAGIC CREATE Table Updates_in_emplength
+# MAGIC AS SELECT 
+# MAGIC col1 AS emp_length,
+# MAGIC col2 AS EmpLength,
+# MAGIC col3 AS addr_state
+# MAGIC FROM (VALUES 
+# MAGIC   ('10+ years', 'OverADecade', 'CA'),
+# MAGIC   ('2 years', '2-3Years', 'PA'),
+# MAGIC   ('n/a', 'Under1year', 'WY'),
+# MAGIC   ('n/a', 'Under1year', 'WI'),
+# MAGIC   ('n/a', 'Under1year', 'FL'),
+# MAGIC   ('n/a', 'Under1year', 'CA'));
 
 # COMMAND ----------
 
@@ -255,7 +238,7 @@ display(dfLendingClub.select('int_rate').distinct())
 # COMMAND ----------
 
 # MAGIC %sql
-# MAGIC SET use_cached_result = false;
+# MAGIC
 # MAGIC DROP TABLE IF EXISTS LendingClub_gold_withPhoton;
 # MAGIC CREATE TABLE LendingClub_gold_withPhoton
 # MAGIC PARTITIONED BY(EmpLength)
@@ -283,6 +266,18 @@ display(dfLendingClub.select('int_rate').distinct())
 
 # COMMAND ----------
 
+# MAGIC %sql
+# MAGIC
+# MAGIC MERGE INTO LendingClub_EmpLength_withPhoton as target
+# MAGIC USING Updates_in_emplength as source
+# MAGIC ON target.addr_state = source.addr_state AND target.emp_length = source.emp_length
+# MAGIC WHEN MATCHED AND source.emp_length = 'n/a' THEN 
+# MAGIC UPDATE SET target.EmpLength = source.EmpLength
+# MAGIC WHEN MATCHED AND source.emp_length!= 'n/a'
+# MAGIC THEN DELETE
+
+# COMMAND ----------
+
 # DBTITLE 1,Now Disable Photon and Test
 # MAGIC %python
 # MAGIC spark.conf.set("spark.databricks.photon.enabled", "false")
@@ -293,8 +288,19 @@ display(dfLendingClub.select('int_rate').distinct())
 
 # COMMAND ----------
 
+# MAGIC %md
+# MAGIC
+# MAGIC There are multiple cache aside from the io cache we expect to be in play. Delta statistics cache that caches the statistics for pruning queries and Parquet cache that cache the Delta checkpoints.
+
+# COMMAND ----------
+
+# DBTITLE 1,Clear Delta Meta Data Cache
+spark._jvm.com.databricks.sql.transaction.tahoe.DeltaLog.clearCache()
+
+# COMMAND ----------
+
 # MAGIC %sql
-# MAGIC SET use_cached_result = false;
+# MAGIC
 # MAGIC DROP TABLE IF EXISTS LendingClub_gold_NoPhoton;
 # MAGIC CREATE TABLE LendingClub_gold_NoPhoton
 # MAGIC PARTITIONED BY(EmpLength)
@@ -324,15 +330,15 @@ display(dfLendingClub.select('int_rate').distinct())
 
 # DBTITLE 1,Disable Predictive I/O which by default is enabled on Photon-accelerated clusters fro DBR 12.1+
 # MAGIC %sql
-# MAGIC ALTER TABLE LendingClub_silver SET TBLPROPERTIES ('delta.enableDeletionVectors' = false);
-# MAGIC ALTER TABLE LendingClub_EmpLength SET TBLPROPERTIES ('delta.enableDeletionVectors' = false);
-# MAGIC ALTER TABLE LendingClub_IntRate SET TBLPROPERTIES ('delta.enableDeletionVectors' = false);
+# MAGIC ALTER TABLE LendingClub_EmpLength_withoutPhoton SET TBLPROPERTIES ('delta.enableDeletionVectors' = false);
 
 # COMMAND ----------
 
 # MAGIC %sql
-# MAGIC SET use_cached_result = false;
 # MAGIC MERGE INTO LendingClub_EmpLength_withoutPhoton as target
 # MAGIC USING Updates_in_emplength as source
-# MAGIC ON target.addr_state = source.addr_state
-# MAGIC WHEN MATCHED THEN DELETE
+# MAGIC ON target.addr_state = source.addr_state AND target.emp_length = source.emp_length
+# MAGIC WHEN MATCHED AND source.emp_length = 'n/a' THEN 
+# MAGIC UPDATE SET target.EmpLength = source.EmpLength
+# MAGIC WHEN MATCHED AND source.emp_length!= 'n/a'
+# MAGIC THEN DELETE
